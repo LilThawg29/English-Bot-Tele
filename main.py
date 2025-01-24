@@ -1,5 +1,6 @@
 import os
 import random
+from datetime import datetime
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, PollAnswerHandler, ContextTypes
@@ -29,7 +30,7 @@ def generate_question(word, all_words):
     """Tạo câu hỏi với 4 đáp án từ danh sách từ vựng."""
     vocab, correct_meaning = word
     other_meanings = [w[1] for w in all_words if w[1] != correct_meaning]
-    options = random.sample(other_meanings, 3) + [correct_meaning]
+    options = random.sample(other_meanings, min(3, len(other_meanings))) + [correct_meaning]
     random.shuffle(options)
     return vocab, correct_meaning, options
 
@@ -69,7 +70,7 @@ async def learn_random_words(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     context.user_data["mode"] = "random"
-    context.user_data["words"] = random.sample(all_words, min(total_questions, len(all_words)))
+    context.user_data["words"] = all_words
     context.user_data["current_question"] = 0
     context.user_data["correct_count"] = 0
     context.user_data["total_questions"] = total_questions
@@ -99,7 +100,7 @@ async def learn_latest_words(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     context.user_data["mode"] = "latest"
-    context.user_data["words"] = random.sample(words, min(total_questions, len(words)))
+    context.user_data["words"] = words
     context.user_data["current_question"] = 0
     context.user_data["correct_count"] = 0
     context.user_data["total_questions"] = total_questions
@@ -112,20 +113,15 @@ async def ask_question(update, context):
     correct_count = context.user_data.get("correct_count", 0)
     vocab_meanings = context.user_data["words"]
     total_questions = context.user_data["total_questions"]
-
+    
     print(f"[DEBUG] Asking question {current_question + 1}/{total_questions}")
     if current_question >= total_questions:
         await send_final_score(update, context, correct_count, total_questions)
         return
 
-    vocab, correct_answer = vocab_meanings[current_question]
-    all_meanings = [meaning for _, meaning in vocab_meanings]
-
-    options = [correct_answer]
-    other_meanings = [meaning for meaning in all_meanings if meaning != correct_answer]
-    options += random.sample(other_meanings, 3)
-    random.shuffle(options)
-
+    word = vocab_meanings[current_question]
+    vocab, correct_answer, options = generate_question(word, vocab_meanings)
+    
     correct_option_id = options.index(correct_answer)
     context.user_data["correct_option_id"] = correct_option_id
 
@@ -143,6 +139,7 @@ async def ask_question(update, context):
     )
 
     context.user_data["current_question"] += 1
+
 
 async def handle_poll_answer(update, context):
     """Xử lý câu trả lời của người dùng từ poll."""
